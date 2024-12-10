@@ -1,0 +1,8 @@
+ogr2ogr \
+  -nln Autobuilding_AB_Calgary_East_utm12_2020 \
+  -nlt PROMOTE_TO_MULTI \
+  -lco GEOMETRY_NAME=geom \
+  -lco FID=gid \
+  -lco PRECISION=NO \
+  Pg:"dbname=AB_Calgary_East_utm12_2020 host=localhost user=postgres port=5432" \
+  "C:\Users\gbola\OneDrive\Desktop\Projects\tile_server\resources\Autobuilding_AB_Calgary_East_utm12_2020_shp\Autobuilding_AB_Calgary_East_utm12_2020_shp\Autobuilding_AB_Calgary_East_utm12_2020.shp"
