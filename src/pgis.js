@@ -2,7 +2,7 @@ const { Client } = require('pg');
 const Postgis = require('postgis');
 
 const client = new Client({
-    connectionString: "postgres://postgres:password@localhost:5432/AB_Calgary_East_utm12_2020"
+    connectionString: "postgres://postgres:Helicraft1@localhost:5432/postgres"
 });
 client.connect();
 
