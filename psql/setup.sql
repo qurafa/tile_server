@@ -1,2 +1,2 @@
---CREATE EXTENSION postgis;
---SELECT postgis_full_version();
+SELECT * FROM raster_columns;
+-- SELECT * FROM raster_overview;

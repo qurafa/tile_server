@@ -1,0 +1,177 @@
+====================================================================
+//serving postgis database through martin alongside mbtiles
+set DATABASE_URL=postgresql://postgres:Helicraft1@localhost:5432/on
+martin D:\Repos(D)\tile_server\resources\mbtiles
+//loading rasters into spatial database
+set PGPASSWORD=Helicraft1
+raster2pgsql -d -e -l 2,3 -I -C -M -F -Y -t auto "D:\Repos(D)\Local Map Data\Inputs\Planet.com\PlanetImages\Q3_2024_PlanetMosaic_geotif.tif" tiff_ottawa_gatineau | psql -U postgres -d on -h localhost -p 5432
+//inserting building .shp data into spatial database
+set PGPASSWORD=Helicraft1
+ogr2ogr -nln autobuilding_ottawa_gatineau -nlt PROMOTE_TO_MULTI -lco GEOMETRY_NAME=geom -lco FID=gid -lco PRECISION=NO Pg:"dbname=on host=localhost user=postgres port=5432" "D:\Repos(D)\Local Map Data\Inputs\Elevation Data (Canada)\Automatically Extracted Buildings\Autobuilding_ON_Ottawa_Gatineau_2020_shp\Autobuilding_ON_Ottawa_Gatineau_2020_shp\Autobuilding_ON_Ottawa_Gatineau_2020.shp"
+//creating a spatial database with .shp file and ogr2ogr for elevation contour lines
+set PGPASSWORD=Helicraft1
+ogr2ogr -nln elevation_250k -nlt PROMOTE_TO_MULTI -lco GEOMETRY_NAME=geom -lco FID=gid -lco PRECISION=NO Pg:"dbname=on host=localhost user=postgres port=5432" "D:\Repos(D)\Local Map Data\Inputs\Elevation Data (Canada)\CanVec\shp\Elevation\canvec_250K_ON_Elevation_shp\canvec_250K_ON_Elevation\contour_1.shp"
+====================================================================
+//testing using data served using "martin" as input to "mapbox" in "nav-display"
+//using mbtiles made using maptiler engine
+compression: gzip
+tile size: 4096
+layer name: Autobuilding_ON_Ottawa_Gatineau_2020
+dir: "D:\Repos(D)\tile_server\resources\mbtiles\Autobuilding_ON_Ottawa_Gatineau_2020.mbtiles"
+//using mbtiles made using qgis
+martin "D:\Repos(D)\tile_server\resources\mbtiles\gis_osm_buildings_a.mbtiles"
+====================================================================
+//testing setting up a local postgis server for vector tiles
+//converting .shp files to tiles using osgeo and saving to postgres db
+set PGPASSWORD=Helicraft1
+ogr2ogr -nln building_2020 -nlt PROMOTE_TO_MULTI -lco GEOMETRY_NAME=geom -lco FID=gid -lco PRECISION=NO Pg:"dbname=ottawa_gatineau host=localhost user=postgres port=5432" "D:\Repos(D)\Local Map Data\Inputs\Elevation Data (Canada)\Automatically Extracted Buildings\Autobuilding_ON_Ottawa_Gatineau_2020_shp\Autobuilding_ON_Ottawa_Gatineau_2020_shp\Autobuilding_ON_Ottawa_Gatineau_2020.shp"
+====================================================================
+//downloading remote vector files including .shp files
+remote host = ftp.maps.canada.ca
+remote directory = pub/nrcan_rncan/vector/canvec/shp/Elevation/
+local directory = D:/Repos(D)/Local Map Data/Inputs/Elevation Data (Canada)/CanVec/shp/Elevation/
+//downloading remote lidar files as .las
+remote host = download-telecharger.services.geo.ca
+remote directory = /pub/elevation/pointclouds_nuagespoints/
+local directory = D:/Repos(D)/Local Map Data/Inputs/Elevation Data (Canada)/LiDAR Point Clouds/
+//downloading remote building files including shp files
+remote host = ftp.maps.canada.ca
+remote directory = /pub/nrcan_rncan/extraction/auto_building/
+local directory = D:/Repos(D)/Local Map Data/Inputs/Elevation Data (Canada)/Automatically Extracted Buildings/
+//downloading remote hrdem dsm files
+remote host = ftp.maps.canada.ca
+remote directory = /pub/elevation/dem_mne/highresolution_hauteresolution/dsm_mns/1m/VILLE_OTTAWA/Ottawa_Gatineau_2020/
+local directory = D:/Repos(D)/Local Map Data/Inputs/Elevation Data (Canada)/High Resolution Digital Elevation Model/DSM/
+//downloading remote hrdem dtm files
+remote host = ftp.maps.canada.ca
+remote directory = /pub/elevation/dem_mne/highresolution_hauteresolution/dtm_mnt/1m/VILLE_OTTAWA/Ottawa_Gatineau_2020/
+local directory = D:/Repos(D)/Local Map Data/Inputs/Elevation Data (Canada)/High Resolution Digital Elevation Model/DTM/
+====================================================================
+//trying the locally installed non-docker version of the cesium terrain builder
+ctb-tile --output-dir "D:\Repos(D)\Local Map Data\Inputs\Elevation Data (Canada)\Canada Digital Elevation Model\output" "D:\Repos(D)\Local Map Data\Inputs\Elevation Data (Canada)\Canada Digital Elevation Model\cdem-canada-dem.tif"
+====================================================================
+//testing generating a single tileset file for a bunch of tiles using Cesium's 3d-tiles-tools
+"D:\Repos(D)\Local Map Data\Inputs\TIF files\terrain\layer.json"
+"D:\Repos(D)\Local Map Data\Inputs\TIF files\terrain\convertOutput\tileset.3dtiles"
+npx ts-node .\src\cli\main.ts convert -i "D:\Repos(D)\Local Map Data\Inputs\TIF files\terrain\layer.json" -o "D:\Repos(D)\Local Map Data\Inputs\TIF files\terrain\convertOutput\tileset.3dtiles"
+====================================================================
+//trying ctb to tile the building shapefiles
+docker run --rm -it --name ctb ^
+    -v "D:\Repos(D)\Local Map Data\Inputs\Elevation Data (Canada)\Automatically Extracted Buildings\Autobuilding_ON_Ottawa_Gatineau_2020_shp\Autobuilding_ON_Ottawa_Gatineau_2020_shp":"/data" ^
+  tumgis/ctb-quantized-mesh
+
+gdalbuildvrt shpTiles.vrt *.shp
+
+ctb-tile -f Mesh -C -N -o terrain shpTiles.vrt
+
+ctb-tile -f Mesh -C -N -l -o terrain shpTiles.vrt
+
+file:///C:/Docker/Local%20Map%20Data/TIF%20files/terrain/layer.json
+====================================================================
+//testing locally tiled elevation tiles and locally tiles imagery......this works!!!
+//imagery
+http://localhost:8003/tilemapresource.xml
+//elevation tiles
+"D:\Repos(D)\Local Map Data\Inputs\TIF files\terrain\layer.json"
+file:///D:/Repos(D)/Local%20Map%20Data/Inputs/TIF%20files/terrain/layer.json
+====================================================================
+//testing the generated tileset as imagery in cesium for unreal
+"D:\Repos(D)\Local Map Data\Inputs\QGIS\TIFF\TMS_Tiles\tilemapresource.xml"
+//testing using gdal to generate the tms tiles run using the OSGeo4W Shell
+"D:\Repos(D)\Local Map Data\Inputs\QGIS\TIFF\PlanetMosaic.tif"
+"D:\Repos(D)\Local Map Data\Inputs\QGIS\TIFF\TMS_Tiles"
+gdal2tiles --zoom=12-15 "D:\Repos(D)\Local Map Data\Inputs\QGIS\TIFF\PlanetMosaic.tif" "D:\Repos(D)\Local Map Data\Inputs\QGIS\TIFF\TMS_Tiles"
+====================================================================
+//testing using xyz tiles gotten from running ageotiff through qgis as an imagery overlay tileset input
+"D:\Repos(D)\Local Map Data\Inputs\QGIS\XYZ TIles\Planet Mosaic\tilemapresource.xml"
+file:///D:/Repos(D)/Local%20Map%20Data/Inputs/QGIS/XYZ%20TIles/Planet%20Mosaic/tilemapresource.xml
+====================================================================
+//testing using local geotiff as imagery for our terrain
+file:///D:/Repos(D)/Local%20Map%20Data/Inputs/Planet.com/PlanetImages/Q3_2024_PlanetMosaic_geotif.tif
+file:///D:/Repos(D)/Local%20Map%20Data/Inputs/Planet.com/PlanetImages/Q3_2024_PlanetMosaic_geotif.tif.aux.xml
+file:///D:/Repos(D)/Local%20Map%20Data/Inputs/Planet.com/PlanetImages/
+====================================================================
+//testing the tiled pointclouds in unreal
+file:///D:/Repos(D)/Local%20Map%20Data/Inputs/CloudCompare/LiDAR%20Point%20Clouds/3205036.copc/output/tileset.json
+//didn't end up using the pdal pre-processed version
+pdal translate "D:\Repos(D)\Local Map Data\Inputs\CloudCompare\LiDAR Point Clouds\3205036.copc\3205036.copc.las" "D:\Repos(D)\Local Map Data\Inputs\CloudCompare\LiDAR Point Clouds\3205036.copc\3205036_EPSG_4326.copc.las" reprojection --filters.reprojection.out_srs=EPSG:4326
+//testing tiling point cloud data...this worked
+gocesiumtiler file -out "D:\Repos(D)\Local Map Data\Inputs\CloudCompare\LiDAR Point Clouds\3205036.copc\output" "D:\Repos(D)\Local Map Data\Inputs\CloudCompare\LiDAR Point Clouds\3205036.copc\3205036.copc.las"
+D:\Repos(D)\Local Map Data\Inputs\CloudCompare\LiDAR Point Clouds\3205036.copc\3205036.copc.las
+D:\Repos(D)\Local Map Data\Inputs\CloudCompare\LiDAR Point Clouds\3205036.copc\output
+====================================================================
+//testing larger scaled building data
+Obj2Tiles --lods 8 --divisions 3 --lat 45.34988405000007 --lon -75.76194904999997 --alt 0 "D:\Repos(D)\Local Map Data\Inputs\Blender\Autobuilding_ON_Ottawa_Gatineau_2020\Autobuilding_ON_Ottawa_Gatineau_2020.obj" "D:\Repos(D)\Local Map Data\Inputs\Blender\Autobuilding_ON_Ottawa_Gatineau_2020\output"
+====================================================================
+file:///D:/Repos(D)/Local%20Map%20Data/Inputs/Blender/output/tileset.json
+D:\Repos(D)\Local Map Data\Inputs\Blender\output
+Obj2Tiles --lods 8 --divisions 3 --lat 45.0024485000000709 --lon -76.2888254999999731 --alt 0 "D:\Repos(D)\Local Map Data\Inputs\Blender\Autobuilding_ON_Ottawa_Gatineau_2020.obj" "D:\Repos(D)\Local Map Data\Inputs\Blender\output"
+//testing with Cesium for Unreal......this worked
+file:///D:/Repos(D)/Local%20Map%20Data/Inputs/Blender/output/tileset.json
+//trying after uploading and exporting from blender......this worked
+Obj2Tiles "D:\Repos(D)\Local Map Data\Inputs\Blender\Autobuilding_ON_Ottawa_Gatineau_2020.obj" "D:\Repos(D)\Local Map Data\Inputs\Blender\output"
+====================================================================
+Name
+EPSG:4979 - WGS 84
+Extent
+-76.2888254999999731,45.0024485000000709 : -75.2350725999999668,45.6973196000000712
+Obj2Tiles "D:\Repos(D)\Local Map Data\Inputs\QGIS\3D Models\AutoBuildings.obj" "D:\Repos(D)\Local Map Data\Inputs\QGIS\3D Models\output"
+====================================================================
+//trying with no lod specification......didn't work
+Obj2Tiles "D:\Repos(D)\Local Map Data\Inputs\QGIS\3D Models\Scene128.obj" ./output
+====================================================================
+file:///D:/Repos(D)/Local%20Map%20Data/Inputs/Obj2Tiles/odm_texturing/output/tileset.json
+//trying with different input file......this worked
+Obj2Tiles --lods 8 --divisions 3 --lat 40.689434025350025 --lon -74.0444987716782 --alt 120 "D:\Repos(D)\Local Map Data\Inputs\Obj2Tiles\odm_texturing\odm_textured_model_geo.obj" "D:\Repos(D)\Local Map Data\Inputs\Obj2Tiles\odm_texturing\output"
+D:\Repos(D)\Obj2Tiles-Win64>Obj2Tiles --lods 8 --divisions 3 --lat 40.689434025350025 --lon -74.0444987716782 --alt 120 "D:\Repos(D)\Local Map Data\Inputs\Obj2Tiles\odm_texturing\odm_textured_model_geo.obj" "D:\Repos(D)\Local Map Data\Inputs\Obj2Tiles\odm_texturing\output"
+====================================================================
+//trying with 6 LODs, seemed to crash after trying to write the tiles for the 7th lod
+Obj2Tiles --lods 6 --divisions 3 --lat 40.689434025350025 --lon -74.0444987716782 --alt 120 "D:\Repos(D)\Local Map Data\Inputs\QGIS\3D Models\Scene128.obj" ".\output"
+====================================================================
+output>>>
+D:\Repos(D)\Obj2Tiles\Obj2Tiles\bin\Release\net8.0>Obj2Tiles --lods 8 --divisions 3 --lat 40.689434025350025 --lon -74.0444987716782 --alt 120 "D:\Repos(D)\Local Map Data\Inputs\QGIS\3D Models\Scene128.obj" "D:\Repos(D)\Local Map Data\Inputs\QGIS\3D Models\output"
+====================================================================
+"D:\Repos(D)\Local Map Data\Inputs\QGIS\3D Models\Scene_16_512.obj"
+"D:\Repos(D)\Local Map Data\Inputs\QGIS\3D Models\Scene_32_512.obj"
+"D:\Repos(D)\Local Map Data\Inputs\QGIS\3D Models\Scene_64_512.obj"
+"D:\Repos(D)\Local Map Data\Inputs\QGIS\3D Models\Scene_128_512.obj"
+====================================================================
+D:\Repos(D)\py3dtilers\geojson_tilesets
+file:///D:/Repos(D)/py3dtilers/geojson_tilesets/tileset.json
+====================================================================
+D:\Repos(D)\py3dtilers\obj_tilesets
+file:///D:/Repos(D)/py3dtilers/obj_tilesets/tileset.json
+====================================================================
+docker run -it --name ctb ^
+    -v "C:\Docker\Local Map Data\DEM Files":"/data" ^
+  tumgis/ctb-quantized-mesh
+
+gdalbuildvrt demTiles.vrt *.dem
+
+ctb-tile -f Mesh -C -N -o terrain gt30w100n90.dem
+
+ctb-tile -f Mesh -C -N -l -o terrain gt30w100n90.dem
+====================================================================
+docker run -it --name ctb ^
+    -v "C:\Docker\Local Map Data\DEM Files":"/data" ^
+  tumgis/ctb-quantized-mesh
+
+gdalbuildvrt demTiles.vrt *.dem
+
+ctb-tile -f Mesh -C -N -o terrain demTiles.vrt
+
+ctb-tile -f Mesh -C -N -l -o terrain demTiles.vrt
+====================================================================
+docker run -it --name ctb ^
+    -v "C:\Docker\Local Map Data\TIF files":"/data" ^
+  tumgis/ctb-quantized-mesh
+
+gdalbuildvrt tiffTiles.vrt *.tif
+
+ctb-tile -f Mesh -C -N -o terrain tiffTiles.vrt
+
+ctb-tile -f Mesh -C -N -l -o terrain tiffTiles.vrt
+
+file:///C:/Docker/Local%20Map%20Data/TIF%20files/terrain/layer.json
+====================================================================
+file:///C:/Users/Craft/Documents/Repos/Z-Tilesets/ZgyIbMt2UUcvBWDx_Tileset/Tileset/tileset.json

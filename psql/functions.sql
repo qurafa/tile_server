@@ -6,6 +6,35 @@ CREATE OR REPLACE
 DECLARE
 	tile bytea;
 BEGIN
+	SELECT ST_AsPNG(
+		ST_Clip(
+			rast,
+			ST_TileEnvelope(z,x,y)
+		)
+	)
+	INTO tile
+	FROM public.tiff_ottawa_gatineau;
+
+	-- IF tile IS NULL THEN
+	-- 	RAISE NOTICE 'Tile (z: %, x: %, y: %) not found', z, x, y;
+	-- 	RETURN NULL;
+	-- ELSE
+	-- 	RETURN tile;
+	-- END IF;
+	RETURN tile;
+END;
+$$ LANGUAGE plpgsql IMMUTABLE STRICT PARALLEL SAFE;
+
+/*
+--Attempt 3 at querying rasters
+DROP FUNCTION IF EXISTS public.tiff_ottawa_gatineau_zxy_query;
+
+CREATE OR REPLACE 
+	FUNCTION public.tiff_ottawa_gatineau_zxy_query(z integer, x integer, y integer)
+	RETURNS bytea AS $$
+DECLARE
+	tile bytea;
+BEGIN
 	SELECT ST_AsPNG(rast)
 	INTO tile
 	FROM public.tiff_ottawa_gatineau
@@ -20,8 +49,10 @@ BEGIN
 
 END;
 $$ LANGUAGE plpgsql IMMUTABLE STRICT PARALLEL SAFE;
+*/
 
 /*
+--Attempt 2 at querying rasters
 DROP FUNCTION IF EXISTS public.tiff_ottawa_gatineau_zxy_query;
 
 CREATE OR REPLACE
@@ -53,6 +84,7 @@ $$ LANGUAGE plpgsql IMMUTABLE STRICT PARALLEL SAFE;
 */
 
 /*
+--Attempt 1 for querying rasters
 DROP FUNCTION IF EXISTS public.tiff_ottawa_gatineau_zxy_query;
 
 CREATE OR REPLACE
